@@ -1,0 +1,15 @@
+version: '3'
+services:
+  seal:
+    restart: always
+    build: .
+    container_name: 'seal'
+    working_dir: '/root/'
+    tty: true
+    volumes:
+      - ../../../ipeq:/root/ipeq
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 128g
