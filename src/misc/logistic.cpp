@@ -94,54 +94,53 @@ void test()
 {
   int d = 5;
   int N = 100;
-  x1 = np.random.randn(N/2, d);
+
   std::srand(time(NULL));
-  vector<double> x1(round(N/2));
-  vector<double> x2(round(N/2));
+  double x1[d][round(N/2)];
+  double x2[d][round(N/2)];
+  double x[d][N];
 
-  vector<int> label1(round(N/2));
-  vector<int> label2(round(N/2));
-  for (int i = 0; i < round(N/2); ++i) {
-    x1[i] = (double)rand()/RAND_MAX;
+  int label1[round(N/2)];
+  int label2[round(N/2)];
+  int label[N];
+  for (int i = 0; i < d; i++) {
     label1[i] = 0;
-  }
-  for (int i = 0; i < round(N/2); ++i) {
-    x2[i] = (double)rand()/RAND_MAX + 6;
     label2[i] = 1;
+    for (int j = 0; j < round(N/2); ++j) {
+      x1[i][j] = (double)rand()/RAND_MAX;
+      x2[i][j] = (double)rand()/RAND_MAX + 6;
+      x[i][j] = x1[i][j];
+      x[i][j+1] = x2[i][j];
+    }
   }
-  vector<double> x(x1);
-  x.insert(x.end(), x2.begin(), x2.end());
-  vector<int> label(label1);
-  label.insert(label.end(), label2.begin(), label2.end());
-
   // dataset = np.column_stack((x,label))
   // np.random.shuffle(dataset)
   //
   // x = dataset[:, :d]
   // label = dataset[:, d]
 
-  param = dict()
-  param["w"] = np.random.rand(d)
-  param["b"] = np.random.random()
-
-  eta = 0.1
-
-  int minibatch_size = 100;
-
-  for epoch in range(10):
-      print("##", epoch)
-      for iteration, index in enumerate(range(0, x.shape[0], minibatch_size)):
-          _x = x[index:index + minibatch_size]
-          _label = label[index:index + minibatch_size]
-          # print(_x, _label)
-          grad_by_client(grads, param, double **data, int *label)
-          agg_grad = grad_by_client(param, _x, _label)
-          # w_grad, b_grad = grad(_x, _label)
-          param = update_param_server(param, agg_grad, eta=0.1)
-          # w -= eta * w_grad
-          # b -= eta * b_grad
-          loss_list.append(np.mean(np.abs(label - logistic(param, x))))
-
-  # 損失の確認
-  print(np.mean(np.abs(label - logistic(param, x))))
+  // param = dict()
+  // param["w"] = np.random.rand(d)
+  // param["b"] = np.random.random()
+  //
+  // eta = 0.1
+  //
+  // int minibatch_size = 100;
+  //
+  // for epoch in range(10):
+  //     print("##", epoch)
+  //     for iteration, index in enumerate(range(0, x.shape[0], minibatch_size)):
+  //         _x = x[index:index + minibatch_size]
+  //         _label = label[index:index + minibatch_size]
+  //         # print(_x, _label)
+  //         grad_by_client(grads, param, double **data, int *label)
+  //         agg_grad = grad_by_client(param, _x, _label)
+  //         # w_grad, b_grad = grad(_x, _label)
+  //         param = update_param_server(param, agg_grad, eta=0.1)
+  //         # w -= eta * w_grad
+  //         # b -= eta * b_grad
+  //         loss_list.append(np.mean(np.abs(label - logistic(param, x))))
+  //
+  // # 損失の確認
+  // print(np.mean(np.abs(label - logistic(param, x))))
 }
