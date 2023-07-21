@@ -8,7 +8,6 @@
 #include "cifer/data/vec.h"
 #include "cifer/innerprod/fullysec/fhipe.h"
 #include "cifer/sample/uniform.h"
-#include "util.h"
 
 struct adult {
     int age;  // continuous

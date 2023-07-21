@@ -220,7 +220,7 @@ int writeIncome_flg(char x[]){
   else  r = 3;
   return r;
 }
-
+/*
 void encAdult(cfe_fhipe_ciphertext *cipher, Adult *db, int len,
   cfe_fhipe_sec_key *sec_key, cfe_fhipe *fhipe){
     mpz_t el;
@@ -290,85 +290,4 @@ void encAdult(cfe_fhipe_ciphertext *cipher, Adult *db, int len,
     cfe_vec_frees(&x, NULL);
     cfe_fhipe_free(&fhipe_copy);
 }
-
-void runAdult1(cfe_fhipe_ciphertext *db, int length, cfe_fhipe_sec_key *sec_key, cfe_fhipe *fhipe){
-  /*
-  SELECT
-    COUNT(*)
-  FROM Ault
-  WHERE
-    sex == 1  ("Female")
-    AND native_country == 9 ("Japan")
-    AND income_flg == 1 (">50K")
-  */
-  // query = [-ar-br'-cr'', r, r', r'', 0,...,0]
-  cfe_vec query;
-  cfe_vec_inits(L, &query, NULL);
-  mpz_t bound, bound_neg;
-  mpz_inits(bound, bound_neg, NULL);
-  mpz_set_ui(bound, 20);
-  // mpz_pow_ui(bound, bound, 2);
-  // mpz_neg(bound_neg, bound);
-  mpz_set_ui(bound_neg, 1);
-  gmp_printf("# bound =%Zd, bound_neg = %Zd\n", bound, bound_neg);
-  cfe_uniform_sample_range_vec(&query, bound_neg, bound);
-
-  mpz_t minus, tmp, fl_1, fl_2, fl_3, zero;
-  // Don't forget mpz_inits
-  mpz_inits(minus, tmp, fl_1, fl_2, fl_3, zero, NULL);
-  mpz_set_si(minus, -1);
-  mpz_set_si(fl_1, 37);
-  mpz_set_si(fl_2, 1);
-  mpz_set_si(fl_3, 2);
-  printf("OK\n");
-  int idx_fl_1 = 1;  // index of age
-  int idx_fl_2 = 14;  // index of native_country
-  int idx_fl_3 = 15;  // index of income_flg
-
-  gmp_printf("## age = %Zd, native_country = %Zd, income_flg = %Zd\n",
-             fl_1, fl_2, fl_3);
-
-  mpz_set_si(tmp, 0);
-  for (size_t i = 0; i < L; i++) {
-    if (i != idx_fl_1 && i != idx_fl_2 && i != idx_fl_3) {
-      cfe_vec_set(&query, tmp, i);
-    }
-  }
-  printVec("query: ", &query);
-  // // y[0] = -ar
-  mpz_neg(query.vec[0], fl_1);
-  // mpz_mul(query.vec[0], minus, fl_1);
-  mpz_mul(query.vec[0], query.vec[0], query.vec[idx_fl_1]);
-  // y[0] = -ar-br'
-  mpz_neg(tmp, fl_2);
-  // mpz_mul(tmp, minus, fl_2);
-  mpz_mul(tmp, tmp, query.vec[idx_fl_2]);
-  mpz_add(query.vec[0], query.vec[0], tmp);
-
-  // y[0] = -ar-br'-cr''
-  mpz_neg(tmp, fl_3);
-  // mpz_mul(tmp, minus, fl_3);
-  mpz_mul(tmp, tmp, query.vec[idx_fl_3]);
-  mpz_add(query.vec[0], query.vec[0], tmp);
-  printVec("query: ", &query);
-
-  // function key for the query
-  cfe_fhipe_fe_key FE_key;
-  cfe_fhipe_fe_key_init(&FE_key, fhipe);
-  cfe_fhipe_derive_fe_key(&FE_key, &query, sec_key, fhipe);
-  mpz_set_si(zero, 0);
-  int result = 0;
-  time_t start_time, end_time;
-  start_time = time(NULL);
-  for (size_t i = 0; i < length; i++) {
-    cfe_fhipe_decrypt(tmp, &db[i], &FE_key, fhipe);
-    // gmp_printf("## [%ld] result = %Zd\n", i, tmp);
-    if (mpz_cmp(tmp, zero) == 0) result++;
-  }
-  end_time = time(NULL);
-  printf("time:%ld\n", end_time - start_time);
-  mpz_clears(bound, bound_neg, minus, tmp, fl_1, fl_2, fl_3, zero, NULL);
-  cfe_fhipe_fe_key_free(&FE_key);
-  cfe_vec_frees(&query, NULL);
-  printf("Result %d\n", result);
-}
+*/

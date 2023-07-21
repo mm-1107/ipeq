@@ -90,43 +90,62 @@ Logistic update_param_server(Logistic param, Logistic grads[], float eta)
     return update_param;
 }
 
+template <typename T>
+void split_array(T *sub_array, T *array, int start, int end) {
+  int length = end - start;
+  for (size_t i = 0; i < length; i++) {
+    sub_array[i] = array[start+i];
+  }
+}
+
 void test()
 {
-  int d = 5;
-  int N = 100;
-
+  int N = 1000;
+  int half = 50;
+  Logistic param;
   std::srand(time(NULL));
-  double x1[d][round(N/2)];
-  double x2[d][round(N/2)];
-  double x[d][N];
+  double x1[half][dim];
+  double x2[half][dim];
+  double x[N][dim];
 
-  int label1[round(N/2)];
-  int label2[round(N/2)];
+  int label1[half];
+  int label2[half];
   int label[N];
-  for (int i = 0; i < d; i++) {
+  // Initialzation
+  for (int i = 0; i < half; i++) {
     label1[i] = 0;
     label2[i] = 1;
-    for (int j = 0; j < round(N/2); ++j) {
+    label[2*i] = 0;
+    label[2*i+1] = 1;
+    for (int j = 0; j < dim; ++j) {
       x1[i][j] = (double)rand()/RAND_MAX;
       x2[i][j] = (double)rand()/RAND_MAX + 6;
-      x[i][j] = x1[i][j];
-      x[i][j+1] = x2[i][j];
+      x[2*i][j] = x1[i][j];
+      x[2*i+1][j] = x2[i][j];
     }
   }
-  // dataset = np.column_stack((x,label))
-  // np.random.shuffle(dataset)
-  //
-  // x = dataset[:, :d]
-  // label = dataset[:, d]
 
-  // param = dict()
-  // param["w"] = np.random.rand(d)
-  // param["b"] = np.random.random()
-  //
-  // eta = 0.1
-  //
-  // int minibatch_size = 100;
-  //
+  for (int i = 0; i < dim; ++i) {
+    param.w[i] = (double)rand()/RAND_MAX;
+  }
+  param.b = (double)rand()/RAND_MAX;
+
+  eta = 0.1
+  int minibatch_size = 100;
+  int epoch = 1;
+  int iteration = N/minibatch_size;
+  Logistic* agg_grad = malloc(minibatch_size * sizeof(Logistic));
+  double sub_x[minibatch_size][d];
+  int sub_label[minibatch_size];
+  for (size_t i = 0; i < epoch; i++) {
+    for (size_t j = 0; j < iteration; j++) {
+      split_array(sub_x, x, j*minibatch_size, (j+1)*minibatch_size);
+      split_array(sub_label, label, j*minibatch_size, (j+1)*minibatch_size);
+      grad_by_client(agg_grad, param, x, label);
+      param = update_param_server(param, agg_grad, eta);
+    }
+  }
+  free(agg_grad);
   // for epoch in range(10):
   //     print("##", epoch)
   //     for iteration, index in enumerate(range(0, x.shape[0], minibatch_size)):
