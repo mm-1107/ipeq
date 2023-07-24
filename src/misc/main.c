@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <math.h>
+#include <pthread.h>
 
 #include "cifer/innerprod/fullysec/fh_multi_ipe.h"
 #include "cifer/sample/uniform.h"
@@ -31,7 +32,7 @@ Logistic decrypt_param_server(
 
 int main(int argc, char const *argv[]) {
     // choose the parameters for the encryption and build the scheme
-    size_t sec_level = 1;
+    size_t sec_level = 2;
     size_t vec_len = 2;
     mpz_t bound, bound_neg, xy;
     mpz_inits(bound, bound_neg, xy, NULL);
@@ -40,13 +41,13 @@ int main(int argc, char const *argv[]) {
     mpz_neg(bound_neg, bound);
 
     cfe_fh_multi_ipe fh_multi_ipe;
-    cfe_error err= cfe_fh_multi_ipe_init(&fh_multi_ipe, sec_level, batch_size, vec_len, bound, bound);
+    cfe_fh_multi_ipe_init(&fh_multi_ipe, sec_level, batch_size, vec_len, bound, bound);
 
     // generate master key
     cfe_fh_multi_ipe_sec_key sec_key;
     cfe_fh_multi_ipe_master_key_init(&sec_key, &fh_multi_ipe);
     FP12_BN254 pub_key;
-    err = cfe_fh_multi_ipe_generate_keys(&sec_key, &pub_key, &fh_multi_ipe);
+    cfe_fh_multi_ipe_generate_keys(&sec_key, &pub_key, &fh_multi_ipe);
     printf("# Generate Key\n");
 
 
@@ -74,7 +75,7 @@ int main(int argc, char const *argv[]) {
     }
     cfe_mat_G2 FE_key;
     cfe_fh_multi_ipe_fe_key_init(&FE_key, &fh_multi_ipe);
-    err = cfe_fh_multi_ipe_derive_fe_key(&FE_key, &y, &sec_key, &fh_multi_ipe);
+    cfe_fh_multi_ipe_derive_fe_key(&FE_key, &y, &sec_key, &fh_multi_ipe);
     cfe_fh_multi_ipe decryptor;
     cfe_fh_multi_ipe_copy(&decryptor, &fh_multi_ipe);
 
@@ -136,6 +137,8 @@ void encrypt_gradient_client(
       cfe_vec_init(&x, 2);
       mpz_set_si(el, round(Q*grads[j].w[i]));
       cfe_vec_set(&x, el, 0);
+      mpz_set_si(el, 1);
+      cfe_vec_set(&x, el, 1);
       cfe_fh_multi_ipe_ciphertext_init(&(enc_grads->w[i][j]), &client);
       cfe_fh_multi_ipe_encrypt(&(enc_grads->w[i][j]), &x, &part_sec_key[j], &client);
     }
@@ -146,6 +149,8 @@ void encrypt_gradient_client(
     cfe_vec_init(&x, 2);
     mpz_set_ui(el, round(Q*grads[j].b));
     cfe_vec_set(&x, el, 0);
+    mpz_set_si(el, 1);
+    cfe_vec_set(&x, el, 1);
     cfe_fh_multi_ipe_ciphertext_init(&(enc_grads->b[j]), &client);
     cfe_fh_multi_ipe_encrypt(&(enc_grads->b[j]), &x, &part_sec_key[j], &client);
   }
@@ -153,6 +158,27 @@ void encrypt_gradient_client(
   mpz_clears(el, NULL);
   cfe_vec_free(&x);
   cfe_fh_multi_ipe_free(&client);
+}
+
+
+struct pack {
+    cfe_vec_G1 *grad;
+  	cfe_mat_G2 *fe_key;
+    FP12_BN254 *pub_key;
+    cfe_fh_multi_ipe *decryptor;
+    double *update_param;
+};
+typedef struct pack Pack;
+
+void *parallel(void *arg_) {
+  Pack *arg;
+  arg = arg_;
+  mpz_t xy;
+  mpz_inits(xy, NULL);
+  cfe_fh_multi_ipe_decrypt(xy, arg->grad, arg->fe_key, arg->pub_key, arg->decryptor);
+  arg->update_param += mpz_get_si(xy);
+  gmp_printf("%Zd ",xy);
+  mpz_clears(xy, NULL);
 }
 
 
@@ -168,12 +194,31 @@ Logistic decrypt_param_server(
   mpz_t xy;
   mpz_inits(xy, NULL);
   cfe_fh_multi_ipe decryptor;
+
+  Pack arg;
+  pthread_t th[dim];
+
   for (size_t i = 0; i < dim; i++) {
+    /*
     cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
     cfe_fh_multi_ipe_decrypt(xy, grads->w[i], FE_key, pub_key, &decryptor);
     update_param.w[i] += mpz_get_si(xy);
     gmp_printf("%Zd ",xy);
+    */
+    printf("## [%d] OK\n", i);
+    cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
+  	arg.grad = grads->w[i];
+  	arg.fe_key = FE_key;
+    arg.pub_key = pub_key;
+    arg.decryptor = &decryptor;
+    arg.update_param = &update_param.w[i];
+    int ret = pthread_create(&th[i], NULL, parallel, (void*)&arg);
   }
+
+  for (size_t i = 0; i < dim; i++) {
+    pthread_join(th[i], NULL);
+  }
+
   cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
   cfe_fh_multi_ipe_decrypt(xy, grads->b, FE_key, pub_key, &decryptor);
   update_param.b += mpz_get_si(xy);
