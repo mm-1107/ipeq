@@ -3,12 +3,16 @@
 #include <vector>
 #include <map>
 #include <numeric>
+#include <cstring>
 #include "logistic.h"
 using namespace std;
+
+
 double sigmoid(double a)
 {
   return 1.0 / (1.0 + exp(-a));
 }
+
 
 double logistic(Logistic param, double *x)
 {
@@ -17,33 +21,38 @@ double logistic(Logistic param, double *x)
     for (size_t i = 0; i < length; i++) {
       dot += param.w[i] * x[i];
     }
-    // vector<double> vec_w(std::begin(param_w), end(param_w));
-    // vector<double> vec_x(std::begin(x), end(x));
-    // double dot = inner_product(vec_w.begin(), vec_w.end(), vec_x.begin(), 0);
     return sigmoid(dot + param.b);
 }
 
-Logistic grad(Logistic param, double *x, int label)
+
+Logistic grad(Logistic param, double x[], int label)
 {
     Logistic grad;
     double error = label - logistic(param, x);
-    size_t length = sizeof(&x) / sizeof(x[0]);
-    for (size_t i = 0, size = length; i < size; ++i)
+    for (size_t i = 0; i < dim; ++i){
       grad.w[i] = (-1) * x[i] * error;
+    }
+    // printf("grad.w[3]=%f\t", grad.w[3]);
     grad.b = (-1) * error;
     return grad;
 }
 
-void grad_by_client(Logistic grads[], Logistic param, double **data, int *label)
+
+void grad_by_client(
+  Logistic *grads,
+  Logistic param,
+  double data[][dim],
+  int *label,
+  int n_clients)
 {
-  size_t n_clients = sizeof(&grads) / sizeof(grads[0]);
   for (size_t i = 0; i < n_clients; i++) {
     grads[i] = grad(param, data[i], label[i]);
   }
 }
 
-template <typename T1, typename T2, typename T3>
-void sum_vector(T1 vec_r, T2 vec_a, T3 vec_b){
+
+void sum_vector(double *vec_r, double *vec_a, double *vec_b)
+{
   // vec_r = vec_a + vec_b
   size_t length = sizeof(&vec_a) / sizeof(vec_a[0]);
   for (size_t i = 0; i < length; i++) {
@@ -51,8 +60,8 @@ void sum_vector(T1 vec_r, T2 vec_a, T3 vec_b){
   }
 }
 
-template <typename T1, typename T2, typename T3>
-void mult_vector(T1 vec_r, T2 vec_a, T3 cons)
+
+void mult_vector(double* vec_r, double* vec_a, double cons)
 {
   // vec_r = vec_a * cons
   size_t length = sizeof(&vec_a) / sizeof(vec_a[0]);
@@ -61,8 +70,8 @@ void mult_vector(T1 vec_r, T2 vec_a, T3 cons)
   }
 }
 
-template <typename T1, typename T2, typename T3>
-void divide_vector(T1 vec_r, T2 vec_a, T3 cons)
+
+void divide_vector(double* vec_r, double* vec_a, double cons)
 {
   // vec_r = vec_a / cons
   size_t length = sizeof(&vec_a) / sizeof(vec_a[0]);
@@ -71,10 +80,22 @@ void divide_vector(T1 vec_r, T2 vec_a, T3 cons)
   }
 }
 
-Logistic update_param_server(Logistic param, Logistic grads[], float eta)
+void split_array(int *sub_array, int *array, int start, int length) {
+  memmove(sub_array, &array[start], sizeof(int) * length);
+  // printf("split_array: %d -> %d\n", array[start+length-1], sub_array[length-1]);
+}
+
+
+void split_mat(double sub_array[][dim], double array[][dim], int start, int length) {
+  for (size_t i = 0; i < length; i++) {
+      memmove(sub_array[i], &array[start+i], sizeof(double) * dim);
+  }
+}
+
+Logistic update_param_server(Logistic param, Logistic grads[], float eta, int n_clients)
 {
     Logistic update_param;
-    size_t n_clients = sizeof(&grads) / sizeof(grads[0]);
+    // size_t n_clients = sizeof(&grads) / sizeof(grads[0]);
     for (size_t i = 0; i < n_clients; i++) {
       sum_vector(update_param.w, update_param.w, grads[i].w);
       update_param.b += grads[i].b;
@@ -90,27 +111,27 @@ Logistic update_param_server(Logistic param, Logistic grads[], float eta)
     return update_param;
 }
 
-template <typename T>
-void split_array(T *sub_array, T *array, int start, int end) {
-  int length = end - start;
-  for (size_t i = 0; i < length; i++) {
-    sub_array[i] = array[start+i];
+
+double loss(Logistic param, double x[][dim], int *label, int n_clients)
+{
+  double loss = 0;
+  for (size_t i = 0; i < n_clients; i++) {
+    loss += abs(label[i] - logistic(param, x[i]));
   }
+  loss = loss / n_clients;
+  return loss;
 }
 
-void test()
+
+void gen_random_train(int size, double x[][dim], int *label)
 {
-  int N = 1000;
-  int half = 50;
-  Logistic param;
-  std::srand(time(NULL));
+  srand(time(NULL));
+  int half = round(size/2);
   double x1[half][dim];
   double x2[half][dim];
-  double x[N][dim];
 
   int label1[half];
   int label2[half];
-  int label[N];
   // Initialzation
   for (int i = 0; i < half; i++) {
     label1[i] = 0;
@@ -124,42 +145,48 @@ void test()
       x[2*i+1][j] = x2[i][j];
     }
   }
+}
 
+
+Logistic init_param()
+{
+  Logistic param;
+  srand(time(NULL));
   for (int i = 0; i < dim; ++i) {
     param.w[i] = (double)rand()/RAND_MAX;
   }
   param.b = (double)rand()/RAND_MAX;
+  return param;
+}
 
-  eta = 0.1
+
+void logistic_regression_plain()
+{
+  int N = 10000;
+  double x[N][dim];
+  int label[N];
+  gen_random_train(N, x, label);
+  Logistic param = init_param();
+
+  double eta = 0.1;
   int minibatch_size = 100;
   int epoch = 1;
   int iteration = N/minibatch_size;
-  Logistic* agg_grad = malloc(minibatch_size * sizeof(Logistic));
-  double sub_x[minibatch_size][d];
+
+  Logistic* agg_grad = (Logistic *)malloc(minibatch_size * sizeof(Logistic));
+  double sub_x[minibatch_size][dim];
   int sub_label[minibatch_size];
+
+  printf("## Loss = %f\n", loss(param, x, label, N));
   for (size_t i = 0; i < epoch; i++) {
     for (size_t j = 0; j < iteration; j++) {
-      split_array(sub_x, x, j*minibatch_size, (j+1)*minibatch_size);
-      split_array(sub_label, label, j*minibatch_size, (j+1)*minibatch_size);
-      grad_by_client(agg_grad, param, x, label);
-      param = update_param_server(param, agg_grad, eta);
+      printf("# Epoch %ld, Iteration %ld\n", i, j);
+      split_mat(sub_x, x, j*minibatch_size, minibatch_size);
+      split_array(sub_label, label, j*minibatch_size, minibatch_size);
+      grad_by_client(agg_grad, param, sub_x, sub_label, minibatch_size);
+      param = update_param_server(param, agg_grad, eta, minibatch_size);
+      printf("## Loss = %f\n", loss(param, x, label, N));
     }
   }
   free(agg_grad);
-  // for epoch in range(10):
-  //     print("##", epoch)
-  //     for iteration, index in enumerate(range(0, x.shape[0], minibatch_size)):
-  //         _x = x[index:index + minibatch_size]
-  //         _label = label[index:index + minibatch_size]
-  //         # print(_x, _label)
-  //         grad_by_client(grads, param, double **data, int *label)
-  //         agg_grad = grad_by_client(param, _x, _label)
-  //         # w_grad, b_grad = grad(_x, _label)
-  //         param = update_param_server(param, agg_grad, eta=0.1)
-  //         # w -= eta * w_grad
-  //         # b -= eta * b_grad
-  //         loss_list.append(np.mean(np.abs(label - logistic(param, x))))
-  //
-  // # 損失の確認
-  // print(np.mean(np.abs(label - logistic(param, x))))
 }

@@ -38,10 +38,10 @@ def update_param_server(param, agg_grad, eta=0.1):
 
 
 if __name__ == '__main__':
-    d = 5
-    N = 100
+    d = 10
+    N = 10000
     x1 = np.random.randn(N//2, d)
-    x2 = np.random.randn(N//2, d) + np.array([6, 6, 6, 6, 6])
+    x2 = np.random.randn(N//2, d) + np.array(np.full(d, 6))
 
     x = np.vstack((x1, x2))
 
@@ -70,12 +70,12 @@ if __name__ == '__main__':
     # １つ選択
     # minibatch_size = N # 最急降下法
     # minibatch_size = 1 # 確率的勾配降下法
-    minibatch_size = 10 # ミニバッチ確率的勾配降下法
+    minibatch_size = 100 # ミニバッチ確率的勾配降下法
 
     # パラメータ更新毎の損失
     loss_list = list()
 
-    for epoch in range(50):
+    for epoch in range(1):
         print("##", epoch)
         for iteration, index in enumerate(range(0, x.shape[0], minibatch_size)):
             _x = x[index:index + minibatch_size]
