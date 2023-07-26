@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <math.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "cifer/innerprod/fullysec/fh_multi_ipe.h"
 #include "cifer/sample/uniform.h"
 
 #include "logistic.h"
-#define Q 256
+#define Q 127
 
 struct encparam {
     cfe_vec_G1 w[dim][batch_size];
@@ -32,12 +33,12 @@ Logistic decrypt_param_server(
 
 int main(int argc, char const *argv[]) {
     // choose the parameters for the encryption and build the scheme
-    size_t sec_level = 2;
+    size_t sec_level = 128;
     size_t vec_len = 2;
     mpz_t bound, bound_neg, xy;
     mpz_inits(bound, bound_neg, xy, NULL);
     mpz_set_ui(bound, 2);
-    mpz_pow_ui(bound, bound, 8);
+    mpz_pow_ui(bound, bound, 7);
     mpz_neg(bound_neg, bound);
 
     cfe_fh_multi_ipe fh_multi_ipe;
@@ -76,9 +77,6 @@ int main(int argc, char const *argv[]) {
     cfe_mat_G2 FE_key;
     cfe_fh_multi_ipe_fe_key_init(&FE_key, &fh_multi_ipe);
     cfe_fh_multi_ipe_derive_fe_key(&FE_key, &y, &sec_key, &fh_multi_ipe);
-    cfe_fh_multi_ipe decryptor;
-    cfe_fh_multi_ipe_copy(&decryptor, &fh_multi_ipe);
-
 
     Encparam enc_grads;
     printf("## Loss = %f\n", loss(param, data, label, N));
@@ -112,7 +110,6 @@ int main(int argc, char const *argv[]) {
     cfe_mat_frees(&y, NULL);
     cfe_mat_G2_free(&FE_key);
     cfe_fh_multi_ipe_free(&fh_multi_ipe);
-    cfe_fh_multi_ipe_free(&decryptor);
     cfe_fh_multi_ipe_master_key_free(&sec_key);
 
     return 0;
@@ -181,6 +178,16 @@ void *parallel(void *arg_) {
   mpz_clears(xy, NULL);
 }
 
+double getExecutiontime(struct timespec *start_time, struct timespec *end_time){
+  unsigned int sec;
+  int nsec;
+  double d_sec;
+  sec = end_time->tv_sec - start_time->tv_sec;
+  nsec = end_time->tv_nsec - start_time->tv_nsec;
+
+  d_sec = (double)sec + (double)nsec / (1000 * 1000 * 1000);
+  return d_sec;
+}
 
 Logistic decrypt_param_server(
   Logistic *param,
@@ -190,21 +197,27 @@ Logistic decrypt_param_server(
   cfe_fh_multi_ipe *fh_multi_ipe,
   float eta)
 {
+  printf("# Decryption\n");
   Logistic update_param;
   mpz_t xy;
   mpz_inits(xy, NULL);
   cfe_fh_multi_ipe decryptor;
 
-  Pack arg;
-  pthread_t th[dim];
+  // Pack arg;
+  // pthread_t th[dim];
+  struct timespec start_time, end_time;
+  double d_sec;
+  clock_gettime(CLOCK_MONOTONIC, &start_time);
 
   for (size_t i = 0; i < dim; i++) {
-    /*
     cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
     cfe_fh_multi_ipe_decrypt(xy, grads->w[i], FE_key, pub_key, &decryptor);
     update_param.w[i] += mpz_get_si(xy);
     gmp_printf("%Zd ",xy);
-    */
+    for (size_t j = 0; j < batch_size; j++) {
+      cfe_vec_G1_free(&(grads->w[i][j]));
+    }
+    /*
     printf("## [%d] OK\n", i);
     cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
   	arg.grad = grads->w[i];
@@ -213,16 +226,33 @@ Logistic decrypt_param_server(
     arg.decryptor = &decryptor;
     arg.update_param = &update_param.w[i];
     int ret = pthread_create(&th[i], NULL, parallel, (void*)&arg);
+    */
   }
-
-  for (size_t i = 0; i < dim; i++) {
-    pthread_join(th[i], NULL);
-  }
+  clock_gettime(CLOCK_MONOTONIC, &end_time);
+  d_sec = getExecutiontime(&start_time, &end_time);
+  printf("time:%f\n", d_sec);
 
   cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
   cfe_fh_multi_ipe_decrypt(xy, grads->b, FE_key, pub_key, &decryptor);
   update_param.b += mpz_get_si(xy);
-  gmp_printf("%Zd ",xy);
+  for (size_t j = 0; j < batch_size; j++) {
+    cfe_vec_G1_free(&(grads->b[j]));
+  }
+  /*
+  pthread_t th_b;
+  arg.grad = grads->b;
+  arg.fe_key = FE_key;
+  arg.pub_key = pub_key;
+  arg.decryptor = &decryptor;
+  arg.update_param = &update_param.b;
+  int ret = pthread_create(&th_b, NULL, parallel, (void*)&arg);
+  printf("## [param_b] OK\n");
+  // gmp_printf("%Zd ",xy);
+  for (size_t i = 0; i < dim; i++) {
+    pthread_join(th[i], NULL);
+  }
+  pthread_join(th_b, NULL);
+  */
   // update_param.w = update_param.w / batch_size;
   divide_vector(update_param.w, update_param.w, Q*batch_size);
   update_param.b = update_param.b / (Q*batch_size);

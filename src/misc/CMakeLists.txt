@@ -6,4 +6,4 @@ add_library(logistic logistic.cpp)
 # add_library(adult adult.c)
 
 add_executable(main main.c)
-target_link_libraries(main logistic gmp cifer m pthread)
+target_link_libraries(main logistic gmp cifer m)
