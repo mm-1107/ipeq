@@ -30,6 +30,7 @@ Logistic decrypt_param_server(
   cfe_fh_multi_ipe *decryptor,
   float eta);
 
+void outputCtxt(Encparam *enc_grads);
 
 int main(int argc, char const *argv[]) {
     // choose the parameters for the encryption and build the scheme
@@ -104,7 +105,14 @@ int main(int argc, char const *argv[]) {
         printf("## Loss = %f\n", loss(param, data, label, N));
       }
     }
-
+    // for (size_t i = 0; i < dim; i++) {
+    //   for (size_t j = 0; j < batch_size; j++) {
+    //     cfe_vec_G1_free(&(enc_grads.w[i][j]));
+    //   }
+    // }
+    // for (size_t j = 0; j < batch_size; j++) {
+    //   cfe_vec_G1_free(&(enc_grads.b[j]));
+    // }
     // clean up
     mpz_clears(bound, bound_neg, xy, el, NULL);
     cfe_mat_frees(&y, NULL);
@@ -116,6 +124,18 @@ int main(int argc, char const *argv[]) {
 }
 
 
+void outputCtxt(Encparam *enc_grads){
+  FILE *fpw = fopen("ctxt.dat", "wb");
+  if (fpw == NULL) {          // オープンに失敗した場合
+   printf("cannot open\n");         // エラーメッセージを出して
+   exit(1);                         // 異常終了
+  }
+
+  fwrite(&enc_grads, sizeof(enc_grads), 1, fpw);  // ファイルを書き込み用にオープン(開く)
+
+  fclose(fpw);
+}
+
 void encrypt_gradient_client(
   Encparam *enc_grads,
   Logistic *grads,
@@ -124,14 +144,17 @@ void encrypt_gradient_client(
 )
 {
   cfe_vec x;
+  cfe_vec_init(&x, 2);
   mpz_t el;
   mpz_init(el);
   cfe_fh_multi_ipe client;
+  cfe_fh_multi_ipe_copy(&client, fh_multi_ipe);
+
   for (size_t i = 0; i < dim; i++) {
     printf("# Param %ld\n", i);
     for (size_t j = 0; j < batch_size; j++) {
-      cfe_fh_multi_ipe_copy(&client, fh_multi_ipe);
-      cfe_vec_init(&x, 2);
+      // cfe_fh_multi_ipe_copy(&client, fh_multi_ipe);
+      // cfe_vec_init(&x, 2);
       mpz_set_si(el, round(Q*grads[j].w[i]));
       cfe_vec_set(&x, el, 0);
       mpz_set_si(el, 1);
@@ -142,8 +165,7 @@ void encrypt_gradient_client(
   }
   printf("# Param b\n");
   for (size_t j = 0; j < batch_size; j++) {
-    cfe_fh_multi_ipe_copy(&client, fh_multi_ipe);
-    cfe_vec_init(&x, 2);
+    // cfe_fh_multi_ipe_copy(&client, fh_multi_ipe);
     mpz_set_ui(el, round(Q*grads[j].b));
     cfe_vec_set(&x, el, 0);
     mpz_set_si(el, 1);
@@ -174,7 +196,7 @@ void *parallel(void *arg_) {
   mpz_inits(xy, NULL);
   cfe_fh_multi_ipe_decrypt(xy, arg->grad, arg->fe_key, arg->pub_key, arg->decryptor);
   arg->update_param += mpz_get_si(xy);
-  gmp_printf("%Zd ",xy);
+  // gmp_printf("%Zd ",xy);
   mpz_clears(xy, NULL);
 }
 
@@ -202,57 +224,73 @@ Logistic decrypt_param_server(
   mpz_t xy;
   mpz_inits(xy, NULL);
   cfe_fh_multi_ipe decryptor;
-
-  // Pack arg;
-  // pthread_t th[dim];
+  cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
+  Pack arg;
+  pthread_t th[dim];
   struct timespec start_time, end_time;
   double d_sec;
   clock_gettime(CLOCK_MONOTONIC, &start_time);
+  int i = 0;
+  for (i = 0; i < dim; i++) {
+    // printf("214\t");
+    // cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
+    // cfe_fh_multi_ipe_decrypt(xy, grads->w[i], FE_key, pub_key, &decryptor);
+    // cfe_fh_multi_ipe_decrypt(xy, grads->b, FE_key, pub_key, &decryptor);
+    // update_param.w[i] += mpz_get_si(xy);
+    // gmp_printf("%Zd\n",xy);
 
-  for (size_t i = 0; i < dim; i++) {
-    printf("214\t");
-    cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
-    cfe_fh_multi_ipe_decrypt(xy, grads->w[i], FE_key, pub_key, &decryptor);
-    update_param.w[i] += mpz_get_si(xy);
-    gmp_printf("%Zd\n",xy);
-    for (size_t j = 0; j < batch_size; j++) {
-      cfe_vec_G1_free(&(grads->w[i][j]));
-    }
-    /*
     printf("## [%d] OK\n", i);
-    cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
+    // cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
   	arg.grad = grads->w[i];
   	arg.fe_key = FE_key;
     arg.pub_key = pub_key;
     arg.decryptor = &decryptor;
-    arg.update_param = &update_param.w[i];
-    int ret = pthread_create(&th[i], NULL, parallel, (void*)&arg);
-    */
+    arg.update_param = &(update_param.w[i]);
+    pthread_create(&th[i], NULL, parallel, (void*)&arg);
   }
 
-  cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
-  printf("234\t");
-  cfe_fh_multi_ipe_decrypt(xy, grads->b, FE_key, pub_key, &decryptor);
-  update_param.b += mpz_get_si(xy);
-  gmp_printf("%Zd\n",xy);
-  // for (size_t j = 0; j < batch_size; j++) {
-  //   cfe_vec_G1_free(&(grads->b[j]));
-  // }
-  /*
+  // cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
+  // printf("234\t");
+  // cfe_fh_multi_ipe_decrypt(xy, grads->b, FE_key, pub_key, &decryptor);
+  // update_param.b += mpz_get_si(xy);
+  // gmp_printf("%Zd\n",xy);
+
   pthread_t th_b;
+  // cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
   arg.grad = grads->b;
   arg.fe_key = FE_key;
   arg.pub_key = pub_key;
   arg.decryptor = &decryptor;
   arg.update_param = &update_param.b;
-  int ret = pthread_create(&th_b, NULL, parallel, (void*)&arg);
+  pthread_create(&th_b, NULL, parallel, (void*)&arg);
   printf("## [param_b] OK\n");
-  // gmp_printf("%Zd ",xy);
   for (size_t i = 0; i < dim; i++) {
-    pthread_join(th[i], NULL);
+    int ret = pthread_join(th[i], NULL);
+    if (ret != 0) {
+          printf("can not join thread\n");
+        }
+    else{
+      printf("joined thread\t");
+      printf("%f\n", update_param.w[i]);
+    }
   }
-  pthread_join(th_b, NULL);
-  */
+  int ret = pthread_join(th_b, NULL);
+  if (ret != 0) {
+        printf("can not join thread\n");
+      }
+  else{
+    printf("joined thread\t");
+    printf("%f\n", update_param.b);
+  }
+
+  // for (size_t j = 0; j < batch_size; j++) {
+  //   cfe_vec_G1_free(&(grads->b[j]));
+  // }
+  // for (size_t i = 0; i < dim; i++) {
+  //   for (size_t j = 0; j < batch_size; j++) {
+  //     cfe_vec_G1_free(&(grads->w[i][j]));
+  //   }
+  // }
   // update_param.w = update_param.w / batch_size;
   divide_vector(update_param.w, update_param.w, Q*batch_size);
   update_param.b = update_param.b / (Q*batch_size);

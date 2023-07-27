@@ -90,15 +90,17 @@ int main(int argc, char const *argv[]) {
 
     // simulate a decryptor
     cfe_fh_multi_ipe decryptor;
-    cfe_fh_multi_ipe_copy(&decryptor, &fh_multi_ipe);
 
     // decryptor collects the ciphertexts and decrypts th value of Σ_i <x_i, y_i>
     // (sum of inner products) where x_i is the i-th encrypted vector and y_i the
     // i-th inner product vector (i-th row of y); note that decryptor decrypts using
     // the FE key without knowing vectors x_i or an inner product matrix y
     clock_gettime(CLOCK_MONOTONIC, &start_time);
-
-    err = cfe_fh_multi_ipe_decrypt(xy, ciphers, &FE_key, &pub_key, &decryptor);
+    for (size_t i = 0; i < 100; i++) {
+      printf("i=%d\n", i);
+      cfe_fh_multi_ipe_copy(&decryptor, &fh_multi_ipe);
+      err = cfe_fh_multi_ipe_decrypt(xy, ciphers, &FE_key, &pub_key, &decryptor);
+    }
 
     clock_gettime(CLOCK_MONOTONIC, &end_time);
     d_sec = getExecutiontime(&start_time, &end_time);
