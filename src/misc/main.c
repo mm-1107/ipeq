@@ -34,7 +34,7 @@ void outputCtxt(Encparam *enc_grads);
 
 int main(int argc, char const *argv[]) {
     // choose the parameters for the encryption and build the scheme
-    size_t sec_level = 1;
+    size_t sec_level = 128;
     size_t vec_len = 2;
     mpz_t bound, bound_neg, xy;
     mpz_inits(bound, bound_neg, xy, NULL);
@@ -232,65 +232,65 @@ Logistic decrypt_param_server(
   clock_gettime(CLOCK_MONOTONIC, &start_time);
   int i = 0;
   for (i = 0; i < dim; i++) {
-    // printf("214\t");
-    // cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
-    // cfe_fh_multi_ipe_decrypt(xy, grads->w[i], FE_key, pub_key, &decryptor);
-    // cfe_fh_multi_ipe_decrypt(xy, grads->b, FE_key, pub_key, &decryptor);
-    // update_param.w[i] += mpz_get_si(xy);
-    // gmp_printf("%Zd\n",xy);
+    printf("214\t");
+    cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
+    cfe_fh_multi_ipe_decrypt(xy, grads->w[i], FE_key, pub_key, &decryptor);
+    cfe_fh_multi_ipe_decrypt(xy, grads->b, FE_key, pub_key, &decryptor);
+    update_param.w[i] += mpz_get_si(xy);
+    gmp_printf("%Zd\n",xy);
 
-    printf("## [%d] OK\n", i);
-    // cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
-  	arg.grad = grads->w[i];
-  	arg.fe_key = FE_key;
-    arg.pub_key = pub_key;
-    arg.decryptor = &decryptor;
-    arg.update_param = &(update_param.w[i]);
-    pthread_create(&th[i], NULL, parallel, (void*)&arg);
+    // printf("## [%d] OK\n", i);
+    // // cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
+  	// arg.grad = grads->w[i];
+  	// arg.fe_key = FE_key;
+    // arg.pub_key = pub_key;
+    // arg.decryptor = &decryptor;
+    // arg.update_param = &(update_param.w[i]);
+    // pthread_create(&th[i], NULL, parallel, (void*)&arg);
   }
 
+  cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
+  printf("234\t");
+  cfe_fh_multi_ipe_decrypt(xy, grads->b, FE_key, pub_key, &decryptor);
+  update_param.b += mpz_get_si(xy);
+  gmp_printf("%Zd\n",xy);
+
+  // pthread_t th_b;
   // cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
-  // printf("234\t");
-  // cfe_fh_multi_ipe_decrypt(xy, grads->b, FE_key, pub_key, &decryptor);
-  // update_param.b += mpz_get_si(xy);
-  // gmp_printf("%Zd\n",xy);
-
-  pthread_t th_b;
-  // cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
-  arg.grad = grads->b;
-  arg.fe_key = FE_key;
-  arg.pub_key = pub_key;
-  arg.decryptor = &decryptor;
-  arg.update_param = &update_param.b;
-  pthread_create(&th_b, NULL, parallel, (void*)&arg);
-  printf("## [param_b] OK\n");
-  for (size_t i = 0; i < dim; i++) {
-    int ret = pthread_join(th[i], NULL);
-    if (ret != 0) {
-          printf("can not join thread\n");
-        }
-    else{
-      printf("joined thread\t");
-      printf("%f\n", update_param.w[i]);
-    }
-  }
-  int ret = pthread_join(th_b, NULL);
-  if (ret != 0) {
-        printf("can not join thread\n");
-      }
-  else{
-    printf("joined thread\t");
-    printf("%f\n", update_param.b);
-  }
-
-  // for (size_t j = 0; j < batch_size; j++) {
-  //   cfe_vec_G1_free(&(grads->b[j]));
-  // }
+  // arg.grad = grads->b;
+  // arg.fe_key = FE_key;
+  // arg.pub_key = pub_key;
+  // arg.decryptor = &decryptor;
+  // arg.update_param = &update_param.b;
+  // pthread_create(&th_b, NULL, parallel, (void*)&arg);
+  // printf("## [param_b] OK\n");
   // for (size_t i = 0; i < dim; i++) {
-  //   for (size_t j = 0; j < batch_size; j++) {
-  //     cfe_vec_G1_free(&(grads->w[i][j]));
+  //   int ret = pthread_join(th[i], NULL);
+  //   if (ret != 0) {
+  //         printf("can not join thread\n");
+  //       }
+  //   else{
+  //     printf("joined thread\t");
+  //     printf("%f\n", update_param.w[i]);
   //   }
   // }
+  // int ret = pthread_join(th_b, NULL);
+  // if (ret != 0) {
+  //       printf("can not join thread\n");
+  //     }
+  // else{
+  //   printf("joined thread\t");
+  //   printf("%f\n", update_param.b);
+  // }
+
+  for (size_t j = 0; j < batch_size; j++) {
+    cfe_vec_G1_free(&(grads->b[j]));
+  }
+  for (size_t i = 0; i < dim; i++) {
+    for (size_t j = 0; j < batch_size; j++) {
+      cfe_vec_G1_free(&(grads->w[i][j]));
+    }
+  }
   // update_param.w = update_param.w / batch_size;
   divide_vector(update_param.w, update_param.w, Q*batch_size);
   update_param.b = update_param.b / (Q*batch_size);
