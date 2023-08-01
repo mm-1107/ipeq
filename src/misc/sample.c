@@ -31,7 +31,7 @@ double getExecutiontime(struct timespec *start_time, struct timespec *end_time){
 
 int main(int argc, char const *argv[]) {
     // choose the parameters for the encryption and build the scheme
-    size_t sec_level = 2;
+    size_t sec_level = 80;
     size_t num_clients = 100;
     size_t vec_len = 2;
     mpz_t bound, bound_neg, xy_check, xy;
@@ -96,7 +96,7 @@ int main(int argc, char const *argv[]) {
     // i-th inner product vector (i-th row of y); note that decryptor decrypts using
     // the FE key without knowing vectors x_i or an inner product matrix y
     clock_gettime(CLOCK_MONOTONIC, &start_time);
-    for (size_t i = 0; i < 100; i++) {
+    for (size_t i = 0; i < 1; i++) {
       printf("i=%d\n", i);
       cfe_fh_multi_ipe_copy(&decryptor, &fh_multi_ipe);
       err = cfe_fh_multi_ipe_decrypt(xy, ciphers, &FE_key, &pub_key, &decryptor);
