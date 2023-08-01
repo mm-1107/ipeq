@@ -34,7 +34,8 @@ void outputCtxt(Encparam *enc_grads);
 
 int main(int argc, char const *argv[]) {
     // choose the parameters for the encryption and build the scheme
-    size_t sec_level = 60;
+    size_t sec_level = 80;
+    printf("Security = %d bits\n", sec_level);
     size_t vec_len = 2;
     mpz_t bound, bound_neg, xy;
     mpz_inits(bound, bound_neg, xy, NULL);
@@ -237,7 +238,9 @@ Logistic decrypt_param_server(
     cfe_fh_multi_ipe_decrypt(xy, grads->w[i], FE_key, pub_key, &decryptor);
     update_param.w[i] += mpz_get_si(xy);
     gmp_printf("%Zd\n",xy);
-
+    for (size_t j = 0; j < batch_size; j++) {
+      cfe_vec_G1_free(&(grads->w[i][j]));
+    }
     // printf("## [%d] OK\n", i);
     // // cfe_fh_multi_ipe_copy(&decryptor, fh_multi_ipe);
   	// arg.grad = grads->w[i];
@@ -285,11 +288,11 @@ Logistic decrypt_param_server(
   for (size_t j = 0; j < batch_size; j++) {
     cfe_vec_G1_free(&(grads->b[j]));
   }
-  for (size_t i = 0; i < dim; i++) {
-    for (size_t j = 0; j < batch_size; j++) {
-      cfe_vec_G1_free(&(grads->w[i][j]));
-    }
-  }
+  // for (size_t i = 0; i < dim; i++) {
+  //   for (size_t j = 0; j < batch_size; j++) {
+  //     cfe_vec_G1_free(&(grads->w[i][j]));
+  //   }
+  // }
   // update_param.w = update_param.w / batch_size;
   divide_vector(update_param.w, update_param.w, Q*batch_size);
   update_param.b = update_param.b / (Q*batch_size);
