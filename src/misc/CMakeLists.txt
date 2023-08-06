@@ -5,6 +5,6 @@ project(FEDB
 add_library(logistic logistic.cpp)
 # add_library(adult adult.c)
 
-add_executable(main main.c)
+add_executable(main main0.c)
 target_compile_options(main PUBLIC -O2 -Wall)
 target_link_libraries(main logistic gmp cifer m pthread)
