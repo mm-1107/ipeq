@@ -2,11 +2,13 @@
 #include <math.h>
 #include <pthread.h>
 #include <time.h>
+#include <stdlib.h>
 
 #include "cifer/innerprod/fullysec/fh_multi_ipe.h"
 #include "cifer/sample/uniform.h"
 
 #include "logistic.h"
+#include "adult.h"
 #define Q 127
 
 struct encparam {
@@ -24,10 +26,11 @@ void update(
   cfe_fh_multi_ipe *fh_multi_ipe);
 
 void outputCtxt(Encparam *enc_grads);
+void readNoise(Logistic *noise_vec);
 
 int main(int argc, char const *argv[]) {
     // choose the parameters for the encryption and build the scheme
-    size_t sec_level = 80;
+    size_t sec_level = 10;
     printf("Security = %d bits\n", sec_level);
     size_t vec_len = 2;
     mpz_t bound, bound_neg, xy;
@@ -50,7 +53,8 @@ int main(int argc, char const *argv[]) {
     int N = 1000;
     double data[N][dim];
     int label[N];
-    gen_random_train(N, data, label);
+    // gen_random_train(N, data, label);
+    readAdult(data, label, "../../../dataset/adult/adult.data", N);
     Logistic param = init_param();
     double eta = 0.1;
     int epoch = 1;
@@ -60,18 +64,12 @@ int main(int argc, char const *argv[]) {
     double sub_x[batch_size][dim];
     int sub_label[batch_size];
 
+    Logistic noise;
     cfe_mat y;
     cfe_mat_init(&y, batch_size, vec_len);
+    cfe_mat_G2 FE_key;
     mpz_t el;
     mpz_init(el);
-    mpz_set_si(el, 1);
-    for (size_t i = 0; i < batch_size; i++) {
-      // y[i] = [1, 0]
-      cfe_mat_set(&y, el, i, 0);
-    }
-    cfe_mat_G2 FE_key;
-    cfe_fh_multi_ipe_fe_key_init(&FE_key, &fh_multi_ipe);
-    cfe_fh_multi_ipe_derive_fe_key(&FE_key, &y, &sec_key, &fh_multi_ipe);
 
     printf("## Loss = %f\n", loss(param, data, label, N));
     mpz_t sum;
@@ -84,9 +82,24 @@ int main(int argc, char const *argv[]) {
         split_mat(sub_x, data, j*batch_size, batch_size);
         split_array(sub_label, label, j*batch_size, batch_size);
         grad_by_client(agg_grad, param, sub_x, sub_label, batch_size);
-
+        if (system("python3 ../ddp/main.py 10") == -1) {
+          printf("Failed to execute the command.\n");
+        }
+        readNoise(&noise);
         for (size_t j = 0; j < dim; j++) {
           printf("-> Param w[%ld]\n", j);
+          printf("--> Set noisy vector...");
+          mpz_set_si(el, 1);
+          for (size_t i = 0; i < batch_size; i++) {
+            // y[i] = [1, 0]
+            cfe_mat_set(&y, el, i, 0);
+          }
+          mpz_set_si(el, noise.w[j]);
+          // y[0] = [1, noise]
+          cfe_mat_set(&y, el, 0, 1);
+          cfe_fh_multi_ipe_fe_key_init(&FE_key, &fh_multi_ipe);
+          cfe_fh_multi_ipe_derive_fe_key(&FE_key, &y, &sec_key, &fh_multi_ipe);
+          printf("OK.\n");
           for (size_t k = 0; k < batch_size; k++) {
             tmp_grad[k] = agg_grad[k].w[j];
           }
@@ -99,7 +112,20 @@ int main(int argc, char const *argv[]) {
             &fh_multi_ipe);
           tmp_param.w[j] += mpz_get_si(sum);
         }
-        printf("-> Param b\n", j);
+        printf("-> Param b\n");
+        printf("--> Noisy vector...");
+        mpz_set_si(el, 1);
+        for (size_t i = 0; i < batch_size; i++) {
+          // y[i] = [1, 0]
+          cfe_mat_set(&y, el, i, 0);
+        }
+        mpz_set_si(el, noise.b);
+        // y[0] = [1, noise]
+        cfe_mat_set(&y, el, 0, 1);
+        cfe_mat_G2 FE_key;
+        cfe_fh_multi_ipe_fe_key_init(&FE_key, &fh_multi_ipe);
+        cfe_fh_multi_ipe_derive_fe_key(&FE_key, &y, &sec_key, &fh_multi_ipe);
+        printf("OK.\n");
         update(
           &sum,
           &agg_grad->b,
@@ -132,6 +158,22 @@ int main(int argc, char const *argv[]) {
     cfe_fh_multi_ipe_master_key_free(&sec_key);
 
     return 0;
+}
+
+
+void readNoise(Logistic *noise_vec){
+  FILE *fin = fopen("./noise.txt", "rt");
+  if (!fin) {
+    perror("fopen");
+    exit(1);
+  }
+  int ret;
+  for (size_t i = 0; i < dim; i++) {
+    ret = fscanf(fin, "%le\n", &noise_vec->w[i]);
+  }
+  ret = fscanf(fin, "%le\n", &noise_vec->b);
+  // 使い終わったらファイルを閉じる
+  fclose(fin);
 }
 
 
@@ -199,7 +241,7 @@ void update(
 
   cfe_fh_multi_ipe client;
   cfe_fh_multi_ipe_copy(&client, fh_multi_ipe);
-  // Encrypt
+  // Encrypt x = [grad[i], 1]
   int i = 0;
   for (i = 0; i < batch_size; i++) {
     mpz_set_si(el, round(Q*param[i]));

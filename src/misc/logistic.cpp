@@ -37,6 +37,21 @@ Logistic grad(Logistic param, double x[], int label)
     return grad;
 }
 
+void clipping(Logistic *grad, int clip_size)
+{
+  double norm = 0;
+  for (size_t i = 0; i < dim; ++i){
+    norm += grad->w[i] * grad->w[i];
+  }
+  norm += grad->b * grad->b;
+  norm = sqrt(norm);
+  if(norm > clip_size){
+    for (size_t i = 0; i < dim; ++i){
+      grad->w[i] = (clip_size * grad->w[i]) / norm;
+    }
+    grad->b = (clip_size * grad->b) / norm;
+  }
+}
 
 void grad_by_client(
   Logistic *grads,
@@ -47,6 +62,7 @@ void grad_by_client(
 {
   for (size_t i = 0; i < n_clients; i++) {
     grads[i] = grad(param, data[i], label[i]);
+    clipping(&grads[i], 1);
   }
 }
 

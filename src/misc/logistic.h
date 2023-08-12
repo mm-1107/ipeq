@@ -1,7 +1,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#define dim 2
+#define dim 13
 #define batch_size 100
 
 struct logistic {

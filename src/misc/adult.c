@@ -1,6 +1,6 @@
 #include "adult.h"
 
-void readAdult(double **dataset, int *label, char* fname, size_t row_num){
+void readAdult(double x[][13], int *label, char* fname, size_t row_num){
   FILE *fin = fopen(fname, "rt");
     if (!fin) {
         perror("fopen");
@@ -17,25 +17,26 @@ void readAdult(double **dataset, int *label, char* fname, size_t row_num){
     char income_flg[10];
     int age;
     float fnlwgt;
+    int tmp;
     // dataset = [age, workclass, education, education_num]
     // printf("|idx|age|workclass|fnlwgt|education|education_num|marital_status|occupation|relationship|race|sex|capital_gain|capital_loss|hours_per_week|native_country|income_flg|\n");
     for (size_t i = 0; i < row_num; i++) {
-      fscanf(fin, "%d, %[^,], %d, %[^,], %d, %[^,], %[^,], %[^,], %[^,], %[^,], %d, %d, %d, %[^,], %s\n",
-      &dataset[i][0], workclass, &db[i].fnlwgt, education,
-      &db[i].education_num, marital_status, occupation,
-      relationship, race, sex, &db[i].capital_gain,
-      &db[i].capital_loss, &db[i].hours_per_week, native_country, income_flg);
+      fscanf(fin, "%d, %[^,], %le, %[^,], %le, %[^,], %[^,], %[^,], %[^,], %[^,], %le, %le, %le, %[^,], %s\n",
+      &tmp, workclass, &x[i][1], education,
+      &x[i][3], marital_status, occupation,
+      relationship, race, sex, &x[i][9],
+      &x[i][10], &x[i][11], native_country, income_flg);
       // String -> Int
-      db[i].workclass = writeWorkclass(workclass);
-      db[i].education = writeEducation(education);
-      db[i].marital_status = writeMarital_status(marital_status);
-      db[i].occupation = writeOccupation(occupation);
-      db[i].relationship = writeRelationship(relationship);
-      db[i].race = writeRace(race);
-      db[i].sex = writeSex(sex);
-      db[i].native_country = writeNative_country(native_country);
-      label[i].income_flg = writeIncome_flg(income_flg);
-      if(i%100==0) printf("wc: %s, %d\n", workclass, db[i].workclass);
+      x[i][0] = writeWorkclass(workclass);
+      x[i][2] = writeEducation(education);
+      x[i][4] = writeMarital_status(marital_status);
+      x[i][5] = writeOccupation(occupation);
+      x[i][6] = writeRelationship(relationship);
+      x[i][7] = writeRace(race);
+      x[i][8] = writeSex(sex);
+      x[i][12] = writeNative_country(native_country);
+      label[i] = writeIncome_flg(income_flg);
+      if(i%100==0) printf("wc: %s, %f\n", workclass, x[i][0]);
     }
     printf("OK\n");
     // 使い終わったらファイルを閉じる
@@ -220,74 +221,3 @@ int writeIncome_flg(char x[]){
   else  r = 3;
   return r;
 }
-/*
-void encAdult(cfe_fhipe_ciphertext *cipher, Adult *db, int len,
-  cfe_fhipe_sec_key *sec_key, cfe_fhipe *fhipe){
-    mpz_t el;
-    mpz_init(el);
-    cfe_vec x;
-    cfe_vec_inits(L, &x, NULL);
-    fillAll(&x, L, 0);  // Must be outside of the loop
-    cfe_fhipe fhipe_copy;
-    for (size_t i = 0; i < len; i++) {
-      cfe_fhipe_copy(&fhipe_copy, fhipe);
-      cfe_fhipe_ciphertext_init(&cipher[i], &fhipe_copy);
-      // [1, age, workclass, ..., income_flg, 0,...,0]
-      mpz_set_ui(el, 1);
-      cfe_vec_set(&x, el, 0);
-
-      mpz_set_ui(el, db[i].age);
-      cfe_vec_set(&x, el, 1);
-
-      mpz_set_ui(el, db[i].workclass);
-      cfe_vec_set(&x, el, 2);
-
-      // mpz_set_ui(el, db[i].fnlwgt);
-      mpz_set_ui(el, 0);
-      cfe_vec_set(&x, el, 3);
-
-      mpz_set_ui(el, db[i].education);
-      cfe_vec_set(&x, el, 4);
-
-      mpz_set_ui(el, db[i].education_num);
-      cfe_vec_set(&x, el, 5);
-
-      mpz_set_ui(el, db[i].marital_status);
-      cfe_vec_set(&x, el, 6);
-
-      mpz_set_ui(el, db[i].occupation);
-      cfe_vec_set(&x, el, 7);
-
-      mpz_set_ui(el, db[i].relationship);
-      cfe_vec_set(&x, el, 8);
-
-      mpz_set_ui(el, db[i].race);
-      cfe_vec_set(&x, el, 9);
-
-      mpz_set_ui(el, db[i].sex);
-      cfe_vec_set(&x, el, 10);
-
-      // mpz_set_ui(el, db[i].capital_gain);
-      mpz_set_ui(el, 0);
-      cfe_vec_set(&x, el, 11);
-
-      // mpz_set_ui(el, db[i].capital_loss);
-      mpz_set_ui(el, 0);
-      cfe_vec_set(&x, el, 12);
-
-      mpz_set_ui(el, db[i].hours_per_week);
-      cfe_vec_set(&x, el, 13);
-
-      mpz_set_ui(el, db[i].native_country);
-      cfe_vec_set(&x, el, 14);
-
-      mpz_set_ui(el, db[i].income_flg);
-      cfe_vec_set(&x, el, 15);
-      if (i%100==1) printVec("adult[%ld]: ", &x);
-      cfe_fhipe_encrypt(&cipher[i], &x, sec_key, &fhipe_copy);
-    }
-    mpz_clears(el, NULL);
-    cfe_vec_frees(&x, NULL);
-    cfe_fhipe_free(&fhipe_copy);
-}
-*/
