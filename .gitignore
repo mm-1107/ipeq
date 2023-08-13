@@ -2,3 +2,4 @@ build/
 src/*.so
 *.bin
 __pycache__/
+.pyc

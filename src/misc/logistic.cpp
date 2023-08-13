@@ -167,7 +167,8 @@ void gen_random_train(int size, double x[][dim], int *label)
 Logistic init_param()
 {
   Logistic param;
-  srand(time(NULL));
+  // srand(time(NULL));
+  srand(1);
   for (int i = 0; i < dim; ++i) {
     param.w[i] = (double)rand()/RAND_MAX;
   }

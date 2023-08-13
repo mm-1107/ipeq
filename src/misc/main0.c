@@ -9,7 +9,7 @@
 
 #include "logistic.h"
 #include "adult.h"
-#define Q 127
+#define Q 128
 
 struct encparam {
     cfe_vec_G1 w[dim][batch_size];
@@ -36,7 +36,7 @@ int main(int argc, char const *argv[]) {
     mpz_t bound, bound_neg, xy;
     mpz_inits(bound, bound_neg, xy, NULL);
     mpz_set_ui(bound, 2);
-    mpz_pow_ui(bound, bound, 7);
+    mpz_pow_ui(bound, bound, 8);
     mpz_neg(bound_neg, bound);
 
     cfe_fh_multi_ipe fh_multi_ipe;
@@ -82,6 +82,7 @@ int main(int argc, char const *argv[]) {
         split_mat(sub_x, data, j*batch_size, batch_size);
         split_array(sub_label, label, j*batch_size, batch_size);
         grad_by_client(agg_grad, param, sub_x, sub_label, batch_size);
+        // Generate ddp noise
         if (system("python3 ../ddp/main.py 10") == -1) {
           printf("Failed to execute the command.\n");
         }
@@ -230,28 +231,32 @@ void update(
   FP12_BN254 *pub_key,
   cfe_fh_multi_ipe *fh_multi_ipe)
 {
+  struct timespec start_time, end_time;
+  double d_sec;
   printf("--> Encryption ");
+  clock_gettime(CLOCK_MONOTONIC, &start_time);
   cfe_vec x;
   cfe_vec_init(&x, 2);
   mpz_t el;
   mpz_init(el);
   cfe_vec_G1 enc_grads[batch_size];
-  struct timespec start_time, end_time;
-  double d_sec;
 
   cfe_fh_multi_ipe client;
   cfe_fh_multi_ipe_copy(&client, fh_multi_ipe);
-  // Encrypt x = [grad[i], 1]
+  // Encrypt x = [grad[i], Q]
   int i = 0;
   for (i = 0; i < batch_size; i++) {
     mpz_set_si(el, round(Q*param[i]));
     cfe_vec_set(&x, el, 0);
-    mpz_set_si(el, 1);
+    mpz_set_si(el, Q);
     cfe_vec_set(&x, el, 1);
     cfe_fh_multi_ipe_ciphertext_init(&enc_grads[i], &client);
     cfe_fh_multi_ipe_encrypt(&enc_grads[i], &x, &part_sec_key[i], &client);
   }
+  clock_gettime(CLOCK_MONOTONIC, &end_time);
   printf("done.\n");
+  d_sec = getExecutiontime(&start_time, &end_time);
+  printf("---> Encryption time:%f\n", d_sec);
 
   // Decrypt
   printf("--> Decryption ");

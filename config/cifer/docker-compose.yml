@@ -1,6 +1,7 @@
 version: '3'
 services:
   cifer:
+    network_mode: "host"
     restart: always
     build: .
     container_name: 'cifer'
