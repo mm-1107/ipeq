@@ -3,3 +3,4 @@ src/*.so
 *.bin
 __pycache__/
 .pyc
+src/attack/*.png
