@@ -39,8 +39,18 @@ def plot_hist(hamming, title, query):
 
 
 def gen_queries(df):
+    # [o_status, o_priority]
     row_unique = df.drop_duplicates(keep='last')
+    s_unique = row_unique.filter(like='o_status', axis=1).drop_duplicates(keep='last')
+    s_columns = s_unique.shape[1]
+    p_unique = row_unique.filter(like='o_priority', axis=1).drop_duplicates(keep='last')
+    p_columns = p_unique.shape[1]
+
+    s_queries = [s_unique.iloc[idx, :].values.tolist()+[0]*p_columns for idx in range(len(s_unique))]
+    p_queries = [[0]*s_columns + p_unique.iloc[idx, :].values.tolist() for idx in range(len(p_unique))]
     queries = [row_unique.iloc[idx, :].values.tolist() for idx in range(len(row_unique))]
+    queries = queries + s_queries + p_queries
+
     print("Queries =", queries)
     return queries
 
@@ -91,7 +101,7 @@ if __name__ == '__main__':
 
     acc = 0
     trial = 10
-    frac = 0.5
+    frac = 0.1
     for i in range(trial):
         print(f"#{i}")
         # Sample adv dataset
