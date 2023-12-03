@@ -32,10 +32,11 @@ def plot_hist(hamming, title, query):
     left = hamming.keys()
     height = hamming.values()
     ax.bar(left, height, align="center")
-    ax.title(query)
+    ax.set_xlabel("Hamming Distance")
+    ax.set_ylabel("Number of records")
+    ax.set_title(query)
     fig.savefig(title)
     plt.close(fig)
-    return (n, bins, patches)
 
 
 def gen_queries(df):
@@ -66,33 +67,49 @@ def compare_hist(d_obs, d_adv):
         freq_obs = d_obs[key] / size_obs
         freq_adv = d_adv[key] / size_adv
         l1_norm += abs(freq_obs - freq_adv)
-    return l1_norm
+    return l1_norm, d_adv
 
 
-def attack(order_all, order_adv, query_obs, queries):
-    # query execution for obs dataset
-    hamming_obs = [hamming(query_obs, list(order_all.iloc[idx])) * len(query)
-                    for idx in range(len(order_all))]
-    # {distance: num of row}
-    distance_obs = Counter(hamming_obs)
-    # plot_hist(distance_obs, "hamming_obs", query_obs)
-
-    # Return the minimum distance query
-    min_dict = {"query": None, "l1norm": 1}
-    for idx, query_adv in enumerate(queries):
+def adv_hamming(order_adv, queries):
+    hamming_adv = dict()
+    for query_adv in queries:
         # query execution for adv dataset
-        hamming_adv = [hamming(query_adv, list(order_adv.iloc[idx])) * len(query_adv)
-                        for idx in range(len(order_adv))]
-        # (n_adv, bins_adv, patches) = plot_hist(hamming_adv, f"hamming_adv_{idx}.png")
-        if max(hamming_obs) >= max(hamming_adv):
-            distance_adv = Counter(hamming_adv)
-            # compare distibution
-            diff = compare_hist(distance_obs, distance_adv)
-            if diff < min_dict["l1norm"]:
-                min_dict["l1norm"] = diff
-                min_dict["query"] = query_adv
-    print(query_obs, min_dict)
-    return query_obs == min_dict["query"]
+        hamming_adv[tuple(query_adv)] = \
+            [hamming(query_adv, list(order_adv.iloc[idx])) * len(query_adv)
+                for idx in range(len(order_adv))]
+    return hamming_adv
+
+
+def attack(order_all, queries, frac=0.1):
+    # Sample adv dataset
+    order_adv = order_all.sample(frac=frac, replace=False)
+    hamming_adv_dict = adv_hamming(order_adv, queries)
+    acc = 0
+    for query_obs in queries:
+        print(f"## query_obs={query_obs}")
+        # query execution for obs dataset
+        hamming_obs = [hamming(query_obs, list(order_all.iloc[idx])) * len(query_obs)
+                        for idx in range(len(order_all))]
+        # {distance: num of row}
+        distance_obs = Counter(hamming_obs)
+        plot_hist(distance_obs, "hamming_obs", query_obs)
+
+        # Return the minimum distance query
+        min_dict = {"query": None, "l1norm": 1}
+        for idx, query_adv in enumerate(queries):
+            hamming_adv = hamming_adv_dict[tuple(query_adv)]
+            if max(hamming_obs) >= max(hamming_adv):
+                distance_adv = Counter(hamming_adv)
+                # compare distibution
+                diff, distance_adv = compare_hist(distance_obs, distance_adv)
+                plot_hist(distance_adv, f"hamming_adv{idx}", query_adv)
+                if diff < min_dict["l1norm"]:
+                    min_dict["l1norm"] = diff
+                    min_dict["query"] = query_adv
+        print("### Correct:", query_obs, "Predict:", min_dict)
+        acc += (query_obs == min_dict["query"])
+    return acc
+
 
 if __name__ == '__main__':
     order_df = read_order()
@@ -101,12 +118,7 @@ if __name__ == '__main__':
 
     acc = 0
     trial = 10
-    frac = 0.1
     for i in range(trial):
-        print(f"#{i}")
-        # Sample adv dataset
-        order_adv = order_all.sample(frac=frac, replace=False)
-        for query in queries:
-            print(f"## query_obs={query}")
-            acc += attack(order_all, order_adv, query, queries)
+        print(f"# Trial {i}")
+        acc += attack(order_all, queries)
     print(f"frac={frac}, accuracy={acc / (len(queries) * trial)}")
