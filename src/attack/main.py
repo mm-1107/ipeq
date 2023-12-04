@@ -16,12 +16,13 @@ def read_order():
         "cleak", "s_priority", "comment"]
     original_df = pd.read_csv("../../dataset/TPCH/scale_01/orders.csv",
                      sep="|", names=columns)
-
+    original_df[["year", "month", "day"]] = original_df["date"].str.split("-", expand=True)
     return original_df
 
 
 def binary_order(df):
     list_cols = ["o_status", "o_priority"]
+    # list_cols = ["o_status", "o_priority", "year"]
     encoder =  ce.BinaryEncoder(cols=list_cols, drop_invariant=True)
     encode_df =  encoder.fit_transform(df[list_cols])
     return encode_df
@@ -40,20 +41,43 @@ def plot_hist(hamming, title, query):
 
 
 def gen_queries(df):
-    # [o_status, o_priority]
+    columns = ["o_status", "o_priority"]
     row_unique = df.drop_duplicates(keep='last')
-    s_unique = row_unique.filter(like='o_status', axis=1).drop_duplicates(keep='last')
-    s_columns = s_unique.shape[1]
-    p_unique = row_unique.filter(like='o_priority', axis=1).drop_duplicates(keep='last')
-    p_columns = p_unique.shape[1]
+    query_set = set()
+    for col in columns:
+        unique_ = row_unique.filter(like=col, axis=1).drop_duplicates(keep='last')
+        size = unique_.shape[1]
+        l = [unique_.iloc[idx, :].values.tolist() for idx in range(len(unique_))]
+        l.append([0]*size)
+        query_set.add(l)
 
-    s_queries = [s_unique.iloc[idx, :].values.tolist()+[0]*p_columns for idx in range(len(s_unique))]
-    p_queries = [[0]*s_columns + p_unique.iloc[idx, :].values.tolist() for idx in range(len(p_unique))]
-    queries = [row_unique.iloc[idx, :].values.tolist() for idx in range(len(row_unique))]
-    queries = queries + s_queries + p_queries
-
-    print("Queries =", queries)
+    queries = []
+    pair = itertools.product(query_set)
+    for p in pair:
+        concat = []
+        for list in p:
+            concat += list
+        queries.appned(concat)
     return queries
+
+
+# def gen_queries(df):
+#     # [o_status, o_priority, year]
+#     row_unique = df.drop_duplicates(keep='last')
+#     s_unique = row_unique.filter(like='o_status', axis=1).drop_duplicates(keep='last')
+#     s_columns = s_unique.shape[1]
+#     p_unique = row_unique.filter(like='o_priority', axis=1).drop_duplicates(keep='last')
+#     p_columns = p_unique.shape[1]
+#     # y_unique = row_unique.filter(like='year', axis=1).drop_duplicates(keep='last')
+#     # y_columns = y_unique.shape[1]
+#
+#     s_queries = [s_unique.iloc[idx, :].values.tolist()+[0]*p_columns for idx in range(len(s_unique))]
+#     p_queries = [[0]*s_columns + p_unique.iloc[idx, :].values.tolist() for idx in range(len(p_unique))]
+#     queries = [row_unique.iloc[idx, :].values.tolist() for idx in range(len(row_unique))]
+#     queries = queries + s_queries + p_queries
+#
+#     print("Queries =", queries)
+#     return queries
 
 
 def compare_hist(d_obs, d_adv):
@@ -92,7 +116,7 @@ def attack(order_all, queries, frac=0.1):
                         for idx in range(len(order_all))]
         # {distance: num of row}
         distance_obs = Counter(hamming_obs)
-        plot_hist(distance_obs, "hamming_obs", query_obs)
+        # plot_hist(distance_obs, "hamming_obs", query_obs)
 
         # Return the minimum distance query
         min_dict = {"query": None, "l1norm": 1}
@@ -102,7 +126,7 @@ def attack(order_all, queries, frac=0.1):
                 distance_adv = Counter(hamming_adv)
                 # compare distibution
                 diff, distance_adv = compare_hist(distance_obs, distance_adv)
-                plot_hist(distance_adv, f"hamming_adv{idx}", query_adv)
+                # plot_hist(distance_adv, f"hamming_adv{idx}", query_adv)
                 if diff < min_dict["l1norm"]:
                     min_dict["l1norm"] = diff
                     min_dict["query"] = query_adv
@@ -118,7 +142,9 @@ if __name__ == '__main__':
 
     acc = 0
     trial = 10
+    frac = 0.05
+    print(f"Size of queries = {len(queries)}")
     for i in range(trial):
         print(f"# Trial {i}")
-        acc += attack(order_all, queries)
+        acc += attack(order_all, queries, frac)
     print(f"frac={frac}, accuracy={acc / (len(queries) * trial)}")
