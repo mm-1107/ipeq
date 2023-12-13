@@ -1,3 +1,4 @@
+import itertools
 import pandas as pd
 import category_encoders as ce
 from scipy.spatial.distance import hamming
@@ -5,26 +6,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 import random
 from collections import Counter
-
+columns = ["o_status", "o_priority", "year", "month", "day"]
 # [1, orderkey, custkey, orderstatus, orderpriority]
 def get_freq(df, columns):
     return df.groupby(columns).count()["o_key"]/len(df)
 
 
 def read_order():
-    columns = ["o_key", "c_key", "o_status", "price", "date", "o_priority",
+    cols = ["o_key", "c_key", "o_status", "price", "date", "o_priority",
         "cleak", "s_priority", "comment"]
     original_df = pd.read_csv("../../dataset/TPCH/scale_01/orders.csv",
-                     sep="|", names=columns)
+                     sep="|", names=cols)
     original_df[["year", "month", "day"]] = original_df["date"].str.split("-", expand=True)
     return original_df
 
 
 def binary_order(df):
-    list_cols = ["o_status", "o_priority"]
-    # list_cols = ["o_status", "o_priority", "year"]
-    encoder =  ce.BinaryEncoder(cols=list_cols, drop_invariant=True)
-    encode_df =  encoder.fit_transform(df[list_cols])
+    encoder =  ce.BinaryEncoder(cols=columns, drop_invariant=True)
+    encode_df =  encoder.fit_transform(df[columns])
     return encode_df
 
 
@@ -40,44 +39,33 @@ def plot_hist(hamming, title, query):
     plt.close(fig)
 
 
+def product(args):
+    pools = [tuple(pool) for pool in args]
+    result = [[]]
+    for pool in pools:
+        result = [x+[y] for x in result for y in pool]
+    for prod in result:
+        yield tuple(prod)
+
 def gen_queries(df):
-    columns = ["o_status", "o_priority"]
     row_unique = df.drop_duplicates(keep='last')
-    query_set = set()
+    query_set = []
     for col in columns:
         unique_ = row_unique.filter(like=col, axis=1).drop_duplicates(keep='last')
         size = unique_.shape[1]
         l = [unique_.iloc[idx, :].values.tolist() for idx in range(len(unique_))]
         l.append([0]*size)
-        query_set.add(l)
+        query_set.append(l)
 
     queries = []
-    pair = itertools.product(query_set)
+    pair = product(query_set)
     for p in pair:
         concat = []
         for list in p:
             concat += list
-        queries.appned(concat)
+        if concat != [0] * len(concat):
+            queries.append(concat)
     return queries
-
-
-# def gen_queries(df):
-#     # [o_status, o_priority, year]
-#     row_unique = df.drop_duplicates(keep='last')
-#     s_unique = row_unique.filter(like='o_status', axis=1).drop_duplicates(keep='last')
-#     s_columns = s_unique.shape[1]
-#     p_unique = row_unique.filter(like='o_priority', axis=1).drop_duplicates(keep='last')
-#     p_columns = p_unique.shape[1]
-#     # y_unique = row_unique.filter(like='year', axis=1).drop_duplicates(keep='last')
-#     # y_columns = y_unique.shape[1]
-#
-#     s_queries = [s_unique.iloc[idx, :].values.tolist()+[0]*p_columns for idx in range(len(s_unique))]
-#     p_queries = [[0]*s_columns + p_unique.iloc[idx, :].values.tolist() for idx in range(len(p_unique))]
-#     queries = [row_unique.iloc[idx, :].values.tolist() for idx in range(len(row_unique))]
-#     queries = queries + s_queries + p_queries
-#
-#     print("Queries =", queries)
-#     return queries
 
 
 def compare_hist(d_obs, d_adv):
@@ -141,7 +129,7 @@ if __name__ == '__main__':
     queries = gen_queries(order_all)
 
     acc = 0
-    trial = 10
+    trial = 1
     frac = 0.05
     print(f"Size of queries = {len(queries)}")
     for i in range(trial):
