@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import random
 from collections import Counter
-columns = ["o_status", "o_priority", "year", "month", "day"]
+# columns = ["o_status", "o_priority", "year", "month", "day"]
+columns = ["o_status", "o_priority", "year", "month"]
 # [1, orderkey, custkey, orderstatus, orderpriority]
 def get_freq(df, columns):
     return df.groupby(columns).count()["o_key"]/len(df)
@@ -82,6 +83,24 @@ def compare_hist(d_obs, d_adv):
     return l1_norm, d_adv
 
 
+def kl_divergence(d_obs, d_adv):
+    epsilon = 0.000001
+    size_obs = sum(d_obs.values())
+    size_adv = sum(d_adv.values())
+    # l1 norm between hist_obs and hist_adv
+    list_obs = []
+    list_adv = []
+    for key in d_obs:
+        if key not in d_adv:
+            d_adv[key] = 0
+        list_obs.append(d_obs[key] / size_obs)
+        list_adv.append(d_adv[key] / size_adv)
+    np_obs = np.asarray(list_obs) + epsilon
+    np_adv = np.asarray(list_adv) + epsilon
+    divergence = np.sum(np_obs*np.log(np_obs/np_adv))
+    return divergence, d_adv
+
+
 def adv_hamming(order_adv, queries):
     hamming_adv = dict()
     for query_adv in queries:
@@ -113,7 +132,8 @@ def attack(order_all, queries, frac=0.1):
             if max(hamming_obs) >= max(hamming_adv):
                 distance_adv = Counter(hamming_adv)
                 # compare distibution
-                diff, distance_adv = compare_hist(distance_obs, distance_adv)
+                # diff, distance_adv = compare_hist(distance_obs, distance_adv)
+                diff, distance_adv = kl_divergence(distance_obs, distance_adv)
                 # plot_hist(distance_adv, f"hamming_adv{idx}", query_adv)
                 if diff < min_dict["l1norm"]:
                     min_dict["l1norm"] = diff
