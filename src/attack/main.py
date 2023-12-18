@@ -133,7 +133,7 @@ def attack(order_all, queries, frac=0.1):
                 # plot_hist(distance_adv, f"hamming_adv{idx}", query_adv)
                 l1_norms.append(diff)
             else:
-                l1_norms.append(1)
+                l1_norms.append(100)
         mat_l1_norms.append(l1_norms)
     # Matching with Hungarian Algorithm
     m = Munkres()
@@ -146,10 +146,13 @@ if __name__ == '__main__':
     order_all = binary_order(order_df)
     queries = gen_queries(order_all)
 
-    trial = 1
-    frac = 0.5
+    trial = 3
+    frac = 0.1
+    acc = 0
     print(f"Size of queries = {len(queries)}")
     for i in range(trial):
-        print(f"# Trial {i}")
-        acc = attack(order_all, queries, frac)
-        print(f"frac={frac}, accuracy={acc}")
+        print(f"# Trial {i+1}")
+        acc_ = attack(order_all, queries, frac)
+        acc += acc_
+        print(f"frac={frac}, accuracy={acc_}\n")
+    print(f"\nMean accuracy={acc/trial}")
