@@ -7,8 +7,9 @@ import numpy as np
 import random
 from copy import deepcopy
 from collections import Counter
+from munkres import Munkres
 # columns = ["o_status", "o_priority", "year", "month", "day"]
-columns = ["o_status", "o_priority", "year", "month"]
+columns = ["o_status", "o_priority"]
 # [1, orderkey, custkey, orderstatus, orderpriority]
 def get_freq(df, columns):
     return df.groupby(columns).count()["o_key"]/len(df)
@@ -70,20 +71,6 @@ def gen_queries(df):
     return queries
 
 
-def compare_hist(d_obs, d_adv):
-    l1_norm = 0
-    size_obs = sum(d_obs.values())
-    size_adv = sum(d_adv.values())
-    # l1 norm between hist_obs and hist_adv
-    for key in d_obs:
-        if key not in d_adv:
-            d_adv[key] = 0
-        freq_obs = d_obs[key] / size_obs
-        freq_adv = d_adv[key] / size_adv
-        l1_norm += abs(freq_obs - freq_adv)
-    return l1_norm, d_adv
-
-
 def kl_divergence(d_obs, d_adv):
     epsilon = 0.000001
     size_obs = sum(d_obs.values())
@@ -112,6 +99,14 @@ def adv_hamming(order_adv, queries):
     return hamming_adv
 
 
+def get_accurary(pairs):
+    acc = 0
+    for p in pairs:
+        if p[0] == p[1]:
+            acc += 1
+    return acc/len(pairs)*100
+
+
 def attack(order_all, queries, frac=0.1):
     # Sample adv dataset
     order_adv = order_all.sample(frac=frac, replace=False)
@@ -119,6 +114,7 @@ def attack(order_all, queries, frac=0.1):
     acc = 0
     query_candidate = deepcopy(queries)
     all_query = len(queries)
+    mat_l1_norms = []
     for idx, query_obs in enumerate(queries):
         print(f"## {idx+1}/{all_query}: query_obs={query_obs}")
         # query execution for obs dataset
@@ -127,24 +123,22 @@ def attack(order_all, queries, frac=0.1):
         # {distance: num of row}
         distance_obs = Counter(hamming_obs)
         # plot_hist(distance_obs, "hamming_obs", query_obs)
-
-        # Return the minimum distance query
-        min_dict = {"query": None, "l1norm": 1}
+        l1_norms = []
         for idx, query_adv in enumerate(query_candidate):
             hamming_adv = hamming_adv_dict[tuple(query_adv)]
             if max(hamming_obs) >= max(hamming_adv):
                 distance_adv = Counter(hamming_adv)
                 # compare distibution
-                # diff, distance_adv = compare_hist(distance_obs, distance_adv)
                 diff, distance_adv = kl_divergence(distance_obs, distance_adv)
                 # plot_hist(distance_adv, f"hamming_adv{idx}", query_adv)
-                if diff < min_dict["l1norm"]:
-                    min_dict["l1norm"] = diff
-                    min_dict["query"] = query_adv
-        print("### Correct:", query_obs, "Predict:", min_dict)
-        query_candidate.remove(min_dict["query"])
-        acc += (query_obs == min_dict["query"])
-    return acc
+                l1_norms.append(diff)
+            else:
+                l1_norms.append(1)
+        mat_l1_norms.append(l1_norms)
+    # Matching with Hungarian Algorithm
+    m = Munkres()
+    opt = m.compute(mat_l1_norms)
+    return get_accurary(opt)
 
 
 if __name__ == '__main__':
@@ -152,11 +146,10 @@ if __name__ == '__main__':
     order_all = binary_order(order_df)
     queries = gen_queries(order_all)
 
-    acc = 0
     trial = 1
-    frac = 0.05
+    frac = 0.5
     print(f"Size of queries = {len(queries)}")
     for i in range(trial):
         print(f"# Trial {i}")
-        acc += attack(order_all, queries, frac)
-    print(f"frac={frac}, accuracy={acc / (len(queries) * trial)}")
+        acc = attack(order_all, queries, frac)
+        print(f"frac={frac}, accuracy={acc}")
