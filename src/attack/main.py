@@ -5,6 +5,7 @@ from scipy.spatial.distance import hamming
 import matplotlib.pyplot as plt
 import numpy as np
 import random
+from copy import deepcopy
 from collections import Counter
 # columns = ["o_status", "o_priority", "year", "month", "day"]
 columns = ["o_status", "o_priority", "year", "month"]
@@ -116,8 +117,10 @@ def attack(order_all, queries, frac=0.1):
     order_adv = order_all.sample(frac=frac, replace=False)
     hamming_adv_dict = adv_hamming(order_adv, queries)
     acc = 0
-    for query_obs in queries:
-        print(f"## query_obs={query_obs}")
+    query_candidate = deepcopy(queries)
+    all_query = len(queries)
+    for idx, query_obs in enumerate(queries):
+        print(f"## {idx+1}/{all_query}: query_obs={query_obs}")
         # query execution for obs dataset
         hamming_obs = [hamming(query_obs, list(order_all.iloc[idx])) * len(query_obs)
                         for idx in range(len(order_all))]
@@ -127,7 +130,7 @@ def attack(order_all, queries, frac=0.1):
 
         # Return the minimum distance query
         min_dict = {"query": None, "l1norm": 1}
-        for idx, query_adv in enumerate(queries):
+        for idx, query_adv in enumerate(query_candidate):
             hamming_adv = hamming_adv_dict[tuple(query_adv)]
             if max(hamming_obs) >= max(hamming_adv):
                 distance_adv = Counter(hamming_adv)
@@ -139,6 +142,7 @@ def attack(order_all, queries, frac=0.1):
                     min_dict["l1norm"] = diff
                     min_dict["query"] = query_adv
         print("### Correct:", query_obs, "Predict:", min_dict)
+        query_candidate.remove(min_dict["query"])
         acc += (query_obs == min_dict["query"])
     return acc
 
