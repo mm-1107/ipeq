@@ -18,7 +18,7 @@ def get_freq(df, columns):
 def read_order():
     cols = ["o_key", "c_key", "o_status", "price", "date", "o_priority",
         "cleak", "s_priority", "comment"]
-    original_df = pd.read_csv("../../dataset/TPCH/scale_01/orders.csv",
+    original_df = pd.read_csv("../../dataset/TPCH/scale_001/orders.csv",
                      sep="|", names=cols)
     original_df[["year", "month", "day"]] = original_df["date"].str.split("-", expand=True)
     return original_df
@@ -144,13 +144,14 @@ if __name__ == '__main__':
     order_all = binary_order(order_df)
     queries = gen_queries(order_all)
 
-    trial = 3
+    trial = 5
     frac = 0.1
-    acc = 0
+    acc = []
     print(f"Size of queries = {len(queries)}")
     for i in range(trial):
         print(f"# Trial {i+1}")
         acc_ = attack(order_all, queries, frac)
-        acc += acc_
+        acc.append(acc_)
         print(f"frac={frac}, accuracy={acc_}\n")
-    print(f"\nMean accuracy={acc/trial}")
+    acc = np.array(acc)
+    print(f"\nMean accuracy={np.mean(acc)}, Median accuracy={np.median(acc)}")
