@@ -71,6 +71,16 @@ def gen_queries(df):
     return queries
 
 
+def adv_hamming(order_adv, queries):
+    hamming_adv = dict()
+    for query_adv in queries:
+        # query execution for adv dataset
+        hamming_adv[tuple(query_adv)] = \
+            Counter([hamming(query_adv, list(order_adv.iloc[idx])) * len(query_adv)
+                for idx in range(len(order_adv))])
+    return hamming_adv
+
+
 def kl_divergence(d_obs, d_adv):
     epsilon = 0.000001
     size_obs = sum(d_obs.values())
@@ -87,16 +97,6 @@ def kl_divergence(d_obs, d_adv):
     np_adv = np.asarray(list_adv) + epsilon
     divergence = np.sum(np_obs*np.log(np_obs/np_adv))
     return divergence, d_adv
-
-
-def adv_hamming(order_adv, queries):
-    hamming_adv = dict()
-    for query_adv in queries:
-        # query execution for adv dataset
-        hamming_adv[tuple(query_adv)] = \
-            [hamming(query_adv, list(order_adv.iloc[idx])) * len(query_adv)
-                for idx in range(len(order_adv))]
-    return hamming_adv
 
 
 def get_accurary(pairs):
@@ -118,18 +118,16 @@ def attack(order_all, queries, frac=0.1):
     for idx, query_obs in enumerate(queries):
         print(f"## {idx+1}/{all_query}: query_obs={query_obs}")
         # query execution for obs dataset
-        hamming_obs = [hamming(query_obs, list(order_all.iloc[idx])) * len(query_obs)
-                        for idx in range(len(order_all))]
         # {distance: num of row}
-        distance_obs = Counter(hamming_obs)
+        hamming_obs = Counter([hamming(query_obs, list(order_all.iloc[idx])) * len(query_obs)
+                        for idx in range(len(order_all))])
         # plot_hist(distance_obs, "hamming_obs", query_obs)
         l1_norms = []
         for idx, query_adv in enumerate(query_candidate):
             hamming_adv = hamming_adv_dict[tuple(query_adv)]
             if max(hamming_obs) >= max(hamming_adv):
-                distance_adv = Counter(hamming_adv)
                 # compare distibution
-                diff, distance_adv = kl_divergence(distance_obs, distance_adv)
+                diff, distance_adv = kl_divergence(hamming_obs, hamming_adv)
                 # plot_hist(distance_adv, f"hamming_adv{idx}", query_adv)
                 l1_norms.append(diff)
             else:
