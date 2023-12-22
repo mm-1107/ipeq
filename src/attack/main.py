@@ -108,9 +108,9 @@ def get_accurary(pairs):
 
 
 def attack(order_all, queries, n_aux=500):
-    order_obs = order_all[:20000]
+    order_obs = order_all[:100000]
     # Sample aux dataset
-    order_aux = order_all[20000:].sample(frac=1, replace=False)[:n_aux]
+    order_aux = order_all[100000:].sample(frac=1, replace=False)[:n_aux]
     hamming_aux_dict = aux_hamming(order_aux, queries)
     acc = 0
     query_candidate = deepcopy(queries)
@@ -146,7 +146,7 @@ if __name__ == '__main__':
     queries = gen_queries(order_all)
 
     trial = 30
-    n_aux = 500
+    n_aux = 5000
     acc = []
     print(f"Size of queries = {len(queries)}")
     for i in range(trial):
@@ -155,4 +155,5 @@ if __name__ == '__main__':
         acc.append(acc_)
         print(f"n_aux={n_aux}, accuracy={acc_}\n")
     acc = np.array(acc)
+    print(acc)
     print(f"\nMean accuracy={np.mean(acc)}, Median accuracy={np.median(acc)}")
