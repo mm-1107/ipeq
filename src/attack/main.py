@@ -18,7 +18,7 @@ def get_freq(df, columns):
 def read_order():
     cols = ["o_key", "c_key", "o_status", "price", "date", "o_priority",
         "cleak", "s_priority", "comment"]
-    original_df = pd.read_csv("../../dataset/TPCH/scale_001/orders.csv",
+    original_df = pd.read_csv("../../dataset/TPCH/scale_05/orders.csv",
                      sep="|", names=cols)
     original_df[["year", "month", "day"]] = original_df["date"].str.split("-", expand=True)
     return original_df
@@ -71,32 +71,32 @@ def gen_queries(df):
     return queries
 
 
-def adv_hamming(order_adv, queries):
-    hamming_adv = dict()
-    for query_adv in queries:
-        # query execution for adv dataset
-        hamming_adv[tuple(query_adv)] = \
-            Counter([hamming(query_adv, list(order_adv.iloc[idx])) * len(query_adv)
-                for idx in range(len(order_adv))])
-    return hamming_adv
+def aux_hamming(order_aux, queries):
+    hamming_aux = dict()
+    for query_aux in queries:
+        # query execution for aux dataset
+        hamming_aux[tuple(query_aux)] = \
+            Counter([hamming(query_aux, list(order_aux.iloc[idx])) * len(query_aux)
+                for idx in range(len(order_aux))])
+    return hamming_aux
 
 
-def kl_divergence(d_obs, d_adv):
+def kl_divergence(d_obs, d_aux):
     epsilon = 0.000001
     size_obs = sum(d_obs.values())
-    size_adv = sum(d_adv.values())
-    # l1 norm between hist_obs and hist_adv
+    size_aux = sum(d_aux.values())
+    # l1 norm between hist_obs and hist_aux
     list_obs = []
-    list_adv = []
+    list_aux = []
     for key in d_obs:
-        if key not in d_adv:
-            d_adv[key] = 0
+        if key not in d_aux:
+            d_aux[key] = 0
         list_obs.append(d_obs[key] / size_obs)
-        list_adv.append(d_adv[key] / size_adv)
+        list_aux.append(d_aux[key] / size_aux)
     np_obs = np.asarray(list_obs) + epsilon
-    np_adv = np.asarray(list_adv) + epsilon
-    divergence = np.sum(np_obs*np.log(np_obs/np_adv))
-    return divergence, d_adv
+    np_aux = np.asarray(list_aux) + epsilon
+    divergence = np.sum(np_obs*np.log(np_obs/np_aux))
+    return divergence, d_aux
 
 
 def get_accurary(pairs):
@@ -107,10 +107,11 @@ def get_accurary(pairs):
     return acc/len(pairs)*100
 
 
-def attack(order_all, queries, frac=0.1):
-    # Sample adv dataset
-    order_adv = order_all.sample(frac=frac, replace=False)
-    hamming_adv_dict = adv_hamming(order_adv, queries)
+def attack(order_all, queries, n_aux=500):
+    order_obs = order_all[:20000]
+    # Sample aux dataset
+    order_aux = order_all[20000:].sample(frac=1, replace=False)[:n_aux]
+    hamming_aux_dict = aux_hamming(order_aux, queries)
     acc = 0
     query_candidate = deepcopy(queries)
     all_query = len(queries)
@@ -119,16 +120,16 @@ def attack(order_all, queries, frac=0.1):
         print(f"## {idx+1}/{all_query}: query_obs={query_obs}")
         # query execution for obs dataset
         # {distance: num of row}
-        hamming_obs = Counter([hamming(query_obs, list(order_all.iloc[idx])) * len(query_obs)
-                        for idx in range(len(order_all))])
+        hamming_obs = Counter([hamming(query_obs, list(order_obs.iloc[idx])) * len(query_obs)
+                        for idx in range(len(order_obs))])
         # plot_hist(distance_obs, "hamming_obs", query_obs)
         l1_norms = []
-        for idx, query_adv in enumerate(query_candidate):
-            hamming_adv = hamming_adv_dict[tuple(query_adv)]
-            if max(hamming_obs) >= max(hamming_adv):
+        for idx, query_aux in enumerate(query_candidate):
+            hamming_aux = hamming_aux_dict[tuple(query_aux)]
+            if max(hamming_obs) >= max(hamming_aux):
                 # compare distibution
-                diff, distance_adv = kl_divergence(hamming_obs, hamming_adv)
-                # plot_hist(distance_adv, f"hamming_adv{idx}", query_adv)
+                diff, dict_aux = kl_divergence(hamming_obs, hamming_aux)
+                # plot_hist(distance_aux, f"hamming_aux{idx}", query_aux)
                 l1_norms.append(diff)
             else:
                 l1_norms.append(100)
@@ -145,13 +146,13 @@ if __name__ == '__main__':
     queries = gen_queries(order_all)
 
     trial = 5
-    frac = 0.1
+    n_aux = 500
     acc = []
     print(f"Size of queries = {len(queries)}")
     for i in range(trial):
         print(f"# Trial {i+1}")
-        acc_ = attack(order_all, queries, frac)
+        acc_ = attack(order_all, queries, n_aux)
         acc.append(acc_)
-        print(f"frac={frac}, accuracy={acc_}\n")
+        print(f"n_aux={n_aux}, accuracy={acc_}\n")
     acc = np.array(acc)
     print(f"\nMean accuracy={np.mean(acc)}, Median accuracy={np.median(acc)}")
